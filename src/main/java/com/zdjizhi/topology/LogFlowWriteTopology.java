@@ -10,17 +10,13 @@ import org.apache.storm.generated.AlreadyAliveException;
 import org.apache.storm.generated.AuthorizationException;
 import org.apache.storm.generated.InvalidTopologyException;
 import org.apache.storm.topology.TopologyBuilder;
-import org.apache.storm.topology.base.BaseWindowedBolt;
 import org.apache.storm.tuple.Fields;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * Storm程序主类
  *
- * @author Administrator
+ * @author wlh
  */
-
 public class LogFlowWriteTopology {
     private static final Log logger = LogFactory.get();
     private final String topologyName;
@@ -47,6 +43,7 @@ public class LogFlowWriteTopology {
 
     private void runLocally() throws InterruptedException {
         topologyConfig.setMaxTaskParallelism(1);
+        topologyConfig.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
         StormRunner.runTopologyLocally(builder, topologyName, topologyConfig, 600);
     }
 
@@ -55,6 +52,7 @@ public class LogFlowWriteTopology {
         topologyConfig.put(Config.TOPOLOGY_TRANSFER_BUFFER_SIZE, CommonConfig.TRANSFER_BUFFER_SIZE);
         topologyConfig.put(Config.TOPOLOGY_EXECUTOR_RECEIVE_BUFFER_SIZE, CommonConfig.EXECUTOR_RECEIVE_BUFFER_SIZE);
         topologyConfig.put(Config.TOPOLOGY_EXECUTOR_SEND_BUFFER_SIZE, CommonConfig.EXECUTOR_SEND_BUFFER_SIZE);
+        topologyConfig.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
         StormRunner.runTopologyRemotely(builder, topologyName, topologyConfig);
     }
 
@@ -63,15 +61,12 @@ public class LogFlowWriteTopology {
         builder.setSpout("SketchLogSpout", new CustomizedKafkaSpout(), CommonConfig.KAFKA_INPUT_PARALLELISM);
         builder.setBolt("ParseSketchLogBolt", new ParseSketchLogBolt(), CommonConfig.KAFKA_INPUT_PARALLELISM)
                 .localOrShuffleGrouping("SketchLogSpout");
-        builder.setBolt("MiddleStreamBolt", new MiddleStreamBolt()
-                .withTumblingWindow(new BaseWindowedBolt.Duration(CommonConfig.STORM_WINDOW_MAX_TIME, TimeUnit.SECONDS)), CommonConfig.STORM_FIRST_AGG_PARALLELISM)
-                .fieldsGrouping("ParseSketchLogBolt", new Fields("common_sled_ip", "common_data_center", "attack_type", "destination_ip"));
+        builder.setBolt("MiddleStreamBolt", new MiddleStreamBolt())
+                .fieldsGrouping("ParseSketchLogBolt", new Fields("attack_type", "destination_ip"));
         builder.setBolt("ServerIpMetricsBolt", new ServerIpMetricsBolt(), CommonConfig.KAFKA_OUTPUT_METRIC_PARALLELISM)
                 .localOrShuffleGrouping("MiddleStreamBolt");
-        builder.setBolt("SecondAggregateBolt", new SecondAggregateBolt(), CommonConfig.STORM_SECOND_AGG_PARALLELISM)
-                .fieldsGrouping("MiddleStreamBolt", new Fields("attack_type", "destination_ip"));
         builder.setBolt("DosDetectionBolt", new DosDetectionBolt(), CommonConfig.KAFKA_OUTPUT_EVENT_PARALLELISM)
-                .localOrShuffleGrouping("SecondAggregateBolt");
+                .localOrShuffleGrouping("MiddleStreamBolt");
     }
 
     public static void main(String[] args) {

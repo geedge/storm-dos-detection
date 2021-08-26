@@ -13,12 +13,9 @@ import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.base.BaseBasicBolt;
 import org.apache.storm.tuple.Tuple;
 
+import java.math.BigDecimal;
 import java.text.NumberFormat;
-import java.text.ParseException;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author wlh
@@ -29,13 +26,12 @@ public class DosDetectionBolt extends BaseBasicBolt {
     private final static int BASELINE_SIZE = 144;
     private KafkaUtils kafkaLogSend;
     private final static NumberFormat PERCENT_INSTANCE = NumberFormat.getPercentInstance();
-    private List<String> list;
+    private List<String> list = new LinkedList<>();
 
     @Override
     public void prepare(Map stormConf, TopologyContext context) {
         PERCENT_INSTANCE.setMinimumFractionDigits(2);
         kafkaLogSend = KafkaUtils.getInstance();
-        list = new LinkedList<>();
     }
 
     @Override
@@ -47,13 +43,14 @@ public class DosDetectionBolt extends BaseBasicBolt {
                 list.clear();
             }
         } else {
-            DosSketchLog sketchLog = (DosSketchLog) input.getValueByField("second_sketch_log");
+            DosSketchLog sketchLog = (DosSketchLog) input.getValueByField("middle_sketch_log");
             DosEventLog dosEventLog = dosDetection(sketchLog);
             String message = JsonMapper.toJsonString(dosEventLog);
-            if (StringUtil.isNotBlank(message)) {
+            if (dosEventLog != null && StringUtil.isNotBlank(message)) {
                 list.add(message);
+                logger.info("dos detection log:{} \n{}",message,dosEventLog);
             }
-            if (list.size() == CommonConfig.KAFKA_OUTPUT_EVENT_BATCH_NUM) {
+            if (list.size() >= CommonConfig.KAFKA_OUTPUT_EVENT_BATCH_NUM) {
                 kafkaLogSend.sendMessage(list, CommonConfig.KAFKA_OUTPUT_EVENT_TOPIC_NAME);
                 logger.info("发送 {} {}条成功", CommonConfig.KAFKA_OUTPUT_EVENT_TOPIC_NAME, list.size());
                 list.clear();
@@ -72,15 +69,13 @@ public class DosDetectionBolt extends BaseBasicBolt {
             if (baseline != null && baseline.size() == BASELINE_SIZE) {
                 int timeIndex = getCurrentTimeIndex(sketchLog.getSketch_start_time());
                 Integer base = baseline.get(timeIndex);
-                long sketchSessions = sketchLog.getSketch_sessions();
-                long diff = sketchSessions - base;
+                long diff = sketchLog.getSketch_sessions() - base;
                 if (diff > 0) {
-                    String percent = getDiffPercent(diff, sketchSessions);
-                    double diffPercentDouble = getDiffPercentDouble(percent);
-                    Severity severity = judgeSeverity(diffPercentDouble);
+                    double percent = getDiffPercent(diff, base);
+                    Severity severity = judgeSeverity(percent);
                     if (severity != Severity.NORMAL) {
                         DosEventLog result = getResult(sketchLog, severity, percent);
-                        logger.info("检测到当前server IP {} 存在 {} 异常,日志详情\n {}", destinationIp, attackType, result.toString());
+                        logger.info("检测到当前server IP {} 存在 {} 异常,超出基线{} {}倍,日志详情\n {}", destinationIp,attackType,base,percent,result);
                         return result;
                     } else {
                         logger.debug("当前server IP：{} 未出现 {} 异常,日志详情 {}", destinationIp, attackType, sketchLog);
@@ -95,14 +90,14 @@ public class DosDetectionBolt extends BaseBasicBolt {
         return null;
     }
 
-    private DosEventLog getResult(DosSketchLog value, Severity severity, String percent) {
+    private DosEventLog getResult(DosSketchLog value, Severity severity, double percent) {
         DosEventLog dosEventLog = new DosEventLog();
         dosEventLog.setLog_id(SnowflakeId.generateId());
         dosEventLog.setStart_time(value.getSketch_start_time());
         dosEventLog.setEnd_time(value.getSketch_start_time() + CommonConfig.STORM_WINDOW_MAX_TIME);
         dosEventLog.setAttack_type(value.getAttack_type());
         dosEventLog.setSeverity(severity.toString());
-        dosEventLog.setConditions(getConditions(percent));
+        dosEventLog.setConditions(getConditions(PERCENT_INSTANCE.format(percent)));
         dosEventLog.setDestination_ip(value.getDestination_ip());
         dosEventLog.setDestination_country(IpUtils.ipLookup.countryLookup(value.getDestination_ip()));
         String ipList = value.getSource_ip();
@@ -133,14 +128,8 @@ public class DosDetectionBolt extends BaseBasicBolt {
         return Integer.parseInt(Long.toString(indexLong));
     }
 
-    private String getDiffPercent(long diff, long sketchSessions) {
-        double diffDou = Double.parseDouble(Long.toString(diff));
-        double sessDou = Double.parseDouble(Long.toString(sketchSessions));
-        return PERCENT_INSTANCE.format(diffDou / sessDou);
-    }
-
-    private double getDiffPercentDouble(String diffPercent) throws ParseException {
-        return PERCENT_INSTANCE.parse(diffPercent).doubleValue();
+    private Double getDiffPercent(long diff, long base) {
+        return BigDecimal.valueOf((float)diff/base).setScale(4, BigDecimal.ROUND_HALF_UP).doubleValue();
     }
 
     private Severity judgeSeverity(double diffPercent) {

@@ -28,9 +28,6 @@ public class CommonConfig {
 
     public static final int STORM_WINDOW_MAX_TIME = CommonConfigurations.getIntProperty("storm.window.max.time");
 
-    public static final int STORM_FIRST_AGG_PARALLELISM = CommonConfigurations.getIntProperty("storm.first.agg.parallelism");
-    public static final int STORM_SECOND_AGG_PARALLELISM = CommonConfigurations.getIntProperty("storm.second.agg.parallelism");
-
     public static final int SOURCE_IP_LIST_LIMIT = CommonConfigurations.getIntProperty("source.ip.list.limit");
     public static final int DATA_CENTER_ID_NUM = CommonConfigurations.getIntProperty("data.center.id.num");
 
@@ -41,6 +38,8 @@ public class CommonConfig {
     public static final double BASELINE_SESSIONS_MAJOR_THRESHOLD = CommonConfigurations.getDoubleProperty("baseline.sessions.major.threshold");
     public static final double BASELINE_SESSIONS_SEVERE_THRESHOLD = CommonConfigurations.getDoubleProperty("baseline.sessions.severe.threshold");
     public static final double BASELINE_SESSIONS_CRITICAL_THRESHOLD = CommonConfigurations.getDoubleProperty("baseline.sessions.critical.threshold");
+
+    public static final int BASELINE_THRESHOLD_SCHEDULE_DAYS = CommonConfigurations.getIntProperty("baseline.threshold.schedule.days");
 
     public static final int DESTINATION_IP_PARTITION_NUM = CommonConfigurations.getIntProperty("destination.ip.partition.num");
 

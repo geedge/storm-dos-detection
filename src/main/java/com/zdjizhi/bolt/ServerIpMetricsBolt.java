@@ -48,7 +48,7 @@ public class ServerIpMetricsBolt extends BaseBasicBolt {
                 if (StringUtil.isNotBlank(message)) {
                     list.add(message);
                 }
-                if (list.size() == CommonConfig.KAFKA_OUTPUT_METRIC_BATCH_NUM) {
+                if (list.size() >= CommonConfig.KAFKA_OUTPUT_METRIC_BATCH_NUM) {
                     kafkaLogSend.sendMessage(list,CommonConfig.KAFKA_OUTPUT_METRIC_TOPIC_NAME);
                     logger.info("发送 {} {}条成功",CommonConfig.KAFKA_OUTPUT_METRIC_TOPIC_NAME,list.size());
                     list.clear();
@@ -63,8 +63,6 @@ public class ServerIpMetricsBolt extends BaseBasicBolt {
         DosMetricsLog dosMetricsLog = new DosMetricsLog();
         try {
             dosMetricsLog.setSketch_start_time(tmpSketchLog.getSketch_start_time());
-            dosMetricsLog.setCommon_sled_ip(tmpSketchLog.getCommon_sled_ip());
-            dosMetricsLog.setCommon_data_center(tmpSketchLog.getCommon_data_center());
             dosMetricsLog.setDestination_ip(tmpSketchLog.getDestination_ip());
             dosMetricsLog.setAttack_type(tmpSketchLog.getAttack_type());
             dosMetricsLog.setSession_rate(tmpSketchLog.getSketch_sessions());

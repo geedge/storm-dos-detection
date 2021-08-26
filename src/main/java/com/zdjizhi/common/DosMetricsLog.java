@@ -5,8 +5,6 @@ import java.io.Serializable;
 public class DosMetricsLog implements Serializable {
 
     private long sketch_start_time;
-    private String common_sled_ip;
-    private String common_data_center;
     private String attack_type;
     private String destination_ip;
     private long session_rate;
@@ -28,22 +26,6 @@ public class DosMetricsLog implements Serializable {
 
     public void setSketch_start_time(long sketch_start_time) {
         this.sketch_start_time = sketch_start_time;
-    }
-
-    public String getCommon_sled_ip() {
-        return common_sled_ip;
-    }
-
-    public void setCommon_sled_ip(String common_sled_ip) {
-        this.common_sled_ip = common_sled_ip;
-    }
-
-    public String getCommon_data_center() {
-        return common_data_center;
-    }
-
-    public void setCommon_data_center(String common_data_center) {
-        this.common_data_center = common_data_center;
     }
 
     public String getAttack_type() {
@@ -90,8 +72,6 @@ public class DosMetricsLog implements Serializable {
     public String toString() {
         return "DosMetricsLog{" +
                 "sketch_start_time=" + sketch_start_time +
-                ", common_sled_ip='" + common_sled_ip + '\'' +
-                ", common_data_center='" + common_data_center + '\'' +
                 ", attack_type='" + attack_type + '\'' +
                 ", destination_ip='" + destination_ip + '\'' +
                 ", session_rate=" + session_rate +

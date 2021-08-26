@@ -3,6 +3,7 @@ package com.zdjizhi.utils;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
 import com.zdjizhi.common.CommonConfig;
+import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.TableName;
@@ -17,6 +18,9 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * HBase 工具类
@@ -47,8 +51,14 @@ public class HBaseUtils {
         hBaseTable = CommonConfig.HBASE_BASELINE_TABLE_NAME;
         //获取连接
         getConnection();
-        //拉取所有
-        getAll();
+        //拉取所有,定时更新
+        ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(2,
+                new BasicThreadFactory.Builder().namingPattern("Dos-Detection-%d").daemon(true).build());
+        try {
+            executorService.scheduleAtFixedRate(HBaseUtils::getAll, 0, CommonConfig.BASELINE_THRESHOLD_SCHEDULE_DAYS, TimeUnit.DAYS);
+        }catch (Exception e){
+            logger.error("定时器任务执行失败", e);
+        }
     }
 
     private static void getConnection() {
