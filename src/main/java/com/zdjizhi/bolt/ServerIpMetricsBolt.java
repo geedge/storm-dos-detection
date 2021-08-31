@@ -9,12 +9,14 @@ import com.zdjizhi.utils.JsonMapper;
 import com.zdjizhi.utils.KafkaUtils;
 import com.zdjizhi.utils.StringUtil;
 import com.zdjizhi.utils.TupleUtils;
+import org.apache.storm.Config;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
 import org.apache.storm.topology.OutputFieldsDeclarer;
 import org.apache.storm.topology.base.BaseBasicBolt;
 import org.apache.storm.tuple.Tuple;
 
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -75,6 +77,14 @@ public class ServerIpMetricsBolt extends BaseBasicBolt {
         }
         return dosMetricsLog;
     }
+
+    @Override
+    public Map<String, Object> getComponentConfiguration() {
+        Map<String, Object> conf = new HashMap<>();
+        conf.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
+        return conf;
+    }
+
 
     private static int getPartitionNumByIp(String destinationIp){
         return Math.abs(destinationIp.hashCode()) % CommonConfig.DESTINATION_IP_PARTITION_NUM;

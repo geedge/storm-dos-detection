@@ -1,159 +1,127 @@
 package com.zdjizhi.utils;
 
-import cn.hutool.log.Log;
-import cn.hutool.log.LogFactory;
 import com.zdjizhi.common.CommonConfig;
-import org.apache.commons.lang3.concurrent.BasicThreadFactory;
-import org.apache.hadoop.conf.Configuration;
+import io.vavr.Tuple;
+import io.vavr.Tuple2;
 import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Writable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * HBase 工具类
- *
- * @author wanglihui
+ * @author wlh
  */
+public class HbaseUtils {
+    private static final Logger logger = LoggerFactory.getLogger(HbaseUtils.class);
+    private static Table table = null;
+    private static Scan scan = null;
+    private static ArrayList<String> floodTypeList = new ArrayList<>();
 
-public class HBaseUtils {
-    private static final Log logger = LogFactory.get();
-    private static Map<String, Map<String, List<Integer>>> baselineMap = new ConcurrentHashMap<>();
-    private static Connection connection;
-
-    private static String zookeeperIp;
-    private static String hBaseTable;
-
-    private static HBaseUtils hBaseUtils;
-
-    private static void getInstance() {
-        hBaseUtils = new HBaseUtils();
+    static {
+        floodTypeList.add("TCP SYN Flood");
+        floodTypeList.add("UDP Flood");
+        floodTypeList.add("ICMP Flood");
+        floodTypeList.add("DNS Amplification");
     }
 
+    private static void prepareHbaseEnv() throws IOException {
+        org.apache.hadoop.conf.Configuration config = HBaseConfiguration.create();
 
-    /**
-     * 构造函数-新
-     */
-    private HBaseUtils() {
-        zookeeperIp = CommonConfig.HBASE_ZOOKEEPER_QUORUM;
-        hBaseTable = CommonConfig.HBASE_BASELINE_TABLE_NAME;
-        //获取连接
-        getConnection();
-        //拉取所有,定时更新
-        ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(2,
-                new BasicThreadFactory.Builder().namingPattern("Dos-Detection-%d").daemon(true).build());
-        try {
-            executorService.scheduleAtFixedRate(HBaseUtils::getAll, 0, CommonConfig.BASELINE_THRESHOLD_SCHEDULE_DAYS, TimeUnit.DAYS);
-        }catch (Exception e){
-            logger.error("定时器任务执行失败", e);
+        config.set("hbase.zookeeper.quorum", CommonConfig.HBASE_ZOOKEEPER_QUORUM);
+        config.set("hbase.client.retries.number", "3");
+        config.set("hbase.bulkload.retries.number", "3");
+        config.set("zookeeper.recovery.retry", "3");
+        config.setInt(HConstants.HBASE_CLIENT_OPERATION_TIMEOUT, CommonConfig.HBASE_CLIENT_OPERATION_TIMEOUT);
+        config.setInt(HConstants.HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD, CommonConfig.HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD);
+
+        TableName tableName = TableName.valueOf(CommonConfig.HBASE_BASELINE_TABLE_NAME);
+        Connection conn = ConnectionFactory.createConnection(config);
+        table = conn.getTable(tableName);
+        scan = new Scan().setAllowPartialResults(true).setLimit(CommonConfig.HBASE_BASELINE_TOTAL_NUM);
+        logger.info("连接hbase成功，正在读取baseline数据");
+    }
+
+    public static void main(String[] args) {
+        Map<String, Map<String, Tuple2<ArrayList<Integer>, Integer>>> baselineMap = readFromHbase();
+        Set<String> keySet = baselineMap.keySet();
+        for (String key : keySet) {
+            Map<String, Tuple2<ArrayList<Integer>, Integer>> stringTuple2Map = baselineMap.get(key);
+            Set<String> strings = stringTuple2Map.keySet();
+            for (String s:strings){
+                Tuple2<ArrayList<Integer>, Integer> arrayListIntegerTuple2 = stringTuple2Map.get(s);
+                System.out.println(key+"---"+s+"---"+arrayListIntegerTuple2._1+"---"+arrayListIntegerTuple2._2);
+            }
         }
+        System.out.println(baselineMap.size());
     }
 
-    private static void getConnection() {
+    public static Map<String, Map<String, Tuple2<ArrayList<Integer>, Integer>>> readFromHbase() {
+        Map<String, Map<String, Tuple2<ArrayList<Integer>, Integer>>> baselineMap = new HashMap<>();
         try {
-            // 管理Hbase的配置信息
-            Configuration configuration = HBaseConfiguration.create();
-            // 设置zookeeper节点
-            configuration.set("hbase.zookeeper.quorum", zookeeperIp);
-            configuration.set("hbase.client.retries.number", "3");
-            configuration.set("hbase.bulkload.retries.number", "3");
-            configuration.set("zookeeper.recovery.retry", "3");
-            connection = ConnectionFactory.createConnection(configuration);
-            logger.warn("HBaseUtils get HBase connection,now to getAll().");
-        } catch (IOException ioe) {
-            logger.error("HBaseUtils getHbaseConn() IOException===>{" + ioe + "}<===");
-        } catch (RuntimeException e) {
-            logger.error("HBaseUtils getHbaseConn() Exception===>{" + e + "}<===");
-        }
-    }
-
-    /**
-     * 获取所有的 key value
-     */
-    private static void getAll() {
-        long begin = System.currentTimeMillis();
-        try {
-            Table table = connection.getTable(TableName.valueOf(hBaseTable));
-            Scan scan = new Scan().setAllowPartialResults(true).setLimit(CommonConfig.HBASE_BASELINE_TOTAL_NUM);
+            prepareHbaseEnv();
+            logger.info("开始读取baseline数据");
             ResultScanner rs = table.getScanner(scan);
             for (Result result : rs) {
-                Map<String, List<Integer>> floodTypeMap = new HashMap<>();
+                Map<String, Tuple2<ArrayList<Integer>, Integer>> floodTypeMap = new HashMap<>();
                 String rowkey = Bytes.toString(result.getRow());
-                ArrayList<Integer> tcp = getArraylist(result,"TCP SYN Flood", "session_num");
-                ArrayList<Integer> udp = getArraylist(result,"UDP Flood", "session_num");
-                ArrayList<Integer> icmp = getArraylist(result,"ICMP Flood", "session_num");
-                ArrayList<Integer> dns = getArraylist(result,"DNS Amplification", "session_num");
-                floodTypeMap.put("TCP SYN Flood",tcp);
-                floodTypeMap.put("UDP Flood",udp);
-                floodTypeMap.put("ICMP Flood",icmp);
-                floodTypeMap.put("DNS Amplification",dns);
-                baselineMap.put(rowkey,floodTypeMap);
+                for (String type:floodTypeList){
+                    ArrayList<Integer> sessionRate = getArraylist(result, type, "session_rate");
+                    if (sessionRate != null && !sessionRate.isEmpty()){
+                        Integer defaultValue = getDefaultValue(result, type, "session_rate_default_value");
+                        floodTypeMap.put(type, Tuple.of(sessionRate, defaultValue));
+                    }
+                }
+                baselineMap.put(rowkey, floodTypeMap);
             }
-
-            logger.warn("HBaseUtils Get fullAmount List size->subIdMap.size(): " + baselineMap.size());
-            logger.warn("HBaseUtils Get fullAmount List size->subIdMap.size() timeConsuming is: " + (System.currentTimeMillis() - begin));
-            rs.close();
-        } catch (IOException ioe) {
-            logger.error("HBaseUtils getAll() is IOException===>{" + ioe + "}<===");
-        } catch (RuntimeException e) {
-            logger.error("HBaseUtils getAll() is Exception===>{" + e + "}<===");
+            logger.info("格式化baseline数据成功，读取IP共：{}", baselineMap.size());
+        } catch (Exception e) {
+            logger.error("读取hbase数据失败", e);
         }
+        return baselineMap;
+    }
+
+    private static Integer getDefaultValue(Result result, String family, String qualifier) {
+        byte[] value = result.getValue(Bytes.toBytes(family), Bytes.toBytes(qualifier));
+        if (value != null){
+            return Bytes.toInt(value);
+        }
+        return 1;
     }
 
     private static ArrayList<Integer> getArraylist(Result result, String family, String qualifier) throws IOException {
-        if (!result.containsColumn(Bytes.toBytes(family), Bytes.toBytes(qualifier))){
-            return null;
+        if (containsColumn(result, family, qualifier)) {
+            ArrayWritable w = new ArrayWritable(IntWritable.class);
+            w.readFields(new DataInputStream(new ByteArrayInputStream(result.getValue(Bytes.toBytes(family), Bytes.toBytes(qualifier)))));
+            return fromWritable(w);
         }
-        ArrayWritable w = new ArrayWritable(IntWritable.class);
-        w.readFields(new DataInputStream(new ByteArrayInputStream(result.getValue(Bytes.toBytes(family), Bytes.toBytes(qualifier)))));
-        return fromWritable(w);
+        return null;
     }
 
     private static ArrayList<Integer> fromWritable(ArrayWritable writable) {
         Writable[] writables = writable.get();
         ArrayList<Integer> list = new ArrayList<>(writables.length);
         for (Writable wrt : writables) {
-            list.add(((IntWritable)wrt).get());
+            list.add(((IntWritable) wrt).get());
         }
         return list;
     }
 
-    /**
-     * 获取 account
-     *
-     * @param destinationIp destinationIp
-     * @param attackType attackType
-     * @return baseline
-     */
-    public static List<Integer> getAccount(String destinationIp,String attackType) {
-
-        if (hBaseUtils == null) {
-            getInstance();
-        }
-        if (baselineMap.containsKey(destinationIp)){
-            return baselineMap.get(destinationIp).getOrDefault(attackType,null);
-        }
-        return null;
-    }
-
-    public static void main(String[] args) {
-        List<Integer> tcpSynFlood = getAccount("192.168.10.8", "ICMP Flood");
-        if (tcpSynFlood != null){
-            System.out.println(Arrays.toString(tcpSynFlood.toArray()));
-            System.out.println(tcpSynFlood.size());
-        }
+    private static boolean containsColumn(Result result, String family, String qualifier) {
+        return result.containsColumn(Bytes.toBytes(family), Bytes.toBytes(qualifier));
     }
 
 }

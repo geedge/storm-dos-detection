@@ -22,6 +22,8 @@ public class CommonConfig {
     public static final int KAFKA_OUTPUT_EVENT_BATCH_NUM = CommonConfigurations.getIntProperty("kafka.output.event.batch.num");
 
     public static final String HBASE_ZOOKEEPER_QUORUM = CommonConfigurations.getStringProperty("hbase.zookeeper.quorum");
+    public static final int HBASE_CLIENT_OPERATION_TIMEOUT = CommonConfigurations.getIntProperty("hbase.client.operation.timeout");
+    public static final int HBASE_CLIENT_SCANNER_TIMEOUT_PERIOD = CommonConfigurations.getIntProperty("hbase.client.scanner.timeout.period");
 
     public static final String HBASE_BASELINE_TABLE_NAME = CommonConfigurations.getStringProperty("hbase.baseline.table.name");
     public static final int HBASE_BASELINE_TOTAL_NUM = CommonConfigurations.getIntProperty("hbase.baseline.total.num");
@@ -60,5 +62,19 @@ public class CommonConfig {
     public static final Integer TOPOLOGY_CONFIG_MAX_SPOUT_PENDING = CommonConfigurations.getIntProperty("topology.config.max.spout.pending");
     public static final Integer TOPOLOGY_NUM_ACKS = CommonConfigurations.getIntProperty("topology.num.acks");
     public static final String PRODUCER_ACK = CommonConfigurations.getStringProperty("producer.ack");
+
+    public static final String BIFANG_SERVER_URI = CommonConfigurations.getStringProperty("bifang.server.uri");
+    public static final String BIFANG_SERVER_USER = CommonConfigurations.getStringProperty("bifang.server.user");
+    public static final String BIFANG_SERVER_PASSWORD = CommonConfigurations.getStringProperty("bifang.server.password");
+    public static final String BIFANG_SERVER_ENCRYPTPWD_PATH = CommonConfigurations.getStringProperty("bifang.server.encryptpwd.path");
+    public static final String BIFANG_SERVER_LOGIN_PATH = CommonConfigurations.getStringProperty("bifang.server.login.path");
+    public static final String BIFANG_SERVER_POLICY_THRESHOLD_PATH = CommonConfigurations.getStringProperty("bifang.server.policy.threshold.path");
+
+    public static final int HTTP_POOL_MAX_CONNECTION = CommonConfigurations.getIntProperty("http.pool.max.connection");
+    public static final int HTTP_POOL_MAX_PER_ROUTE = CommonConfigurations.getIntProperty("http.pool.max.per.route");
+    public static final int HTTP_POOL_REQUEST_TIMEOUT = CommonConfigurations.getIntProperty("http.pool.request.timeout");
+    public static final int HTTP_POOL_CONNECT_TIMEOUT = CommonConfigurations.getIntProperty("http.pool.connect.timeout");
+    public static final int HTTP_POOL_RESPONSE_TIMEOUT = CommonConfigurations.getIntProperty("http.pool.response.timeout");
+
 
 }

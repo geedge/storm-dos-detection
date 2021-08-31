@@ -43,7 +43,7 @@ public class LogFlowWriteTopology {
 
     private void runLocally() throws InterruptedException {
         topologyConfig.setMaxTaskParallelism(1);
-        topologyConfig.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
+//        topologyConfig.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
         StormRunner.runTopologyLocally(builder, topologyName, topologyConfig, 600);
     }
 
@@ -52,7 +52,7 @@ public class LogFlowWriteTopology {
         topologyConfig.put(Config.TOPOLOGY_TRANSFER_BUFFER_SIZE, CommonConfig.TRANSFER_BUFFER_SIZE);
         topologyConfig.put(Config.TOPOLOGY_EXECUTOR_RECEIVE_BUFFER_SIZE, CommonConfig.EXECUTOR_RECEIVE_BUFFER_SIZE);
         topologyConfig.put(Config.TOPOLOGY_EXECUTOR_SEND_BUFFER_SIZE, CommonConfig.EXECUTOR_SEND_BUFFER_SIZE);
-        topologyConfig.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
+//        topologyConfig.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
         StormRunner.runTopologyRemotely(builder, topologyName, topologyConfig);
     }
 

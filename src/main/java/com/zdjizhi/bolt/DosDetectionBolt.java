@@ -6,7 +6,10 @@ import com.zdjizhi.common.CommonConfig;
 import com.zdjizhi.common.DosEventLog;
 import com.zdjizhi.common.DosSketchLog;
 import com.zdjizhi.utils.*;
+import io.vavr.Tuple2;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.concurrent.BasicThreadFactory;
+import org.apache.storm.Config;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
 import org.apache.storm.topology.OutputFieldsDeclarer;
@@ -16,6 +19,9 @@ import org.apache.storm.tuple.Tuple;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.util.*;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author wlh
@@ -26,13 +32,32 @@ public class DosDetectionBolt extends BaseBasicBolt {
     private final static int BASELINE_SIZE = 144;
     private KafkaUtils kafkaLogSend;
     private final static NumberFormat PERCENT_INSTANCE = NumberFormat.getPercentInstance();
+    private static Map<String, Map<String, Tuple2<ArrayList<Integer>, Integer>>> baselineMap = new HashMap<>();
     private List<String> list = new LinkedList<>();
 
     @Override
     public void prepare(Map stormConf, TopologyContext context) {
+        ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(2,
+                new BasicThreadFactory.Builder().namingPattern("Dos-Detection-%d").daemon(true).build());
+        try {
+            executorService.scheduleAtFixedRate(() -> {
+                //do something
+                baselineMap = HbaseUtils.readFromHbase();
+            }, 0, CommonConfig.BASELINE_THRESHOLD_SCHEDULE_DAYS, TimeUnit.DAYS);
+        } catch (Exception e) {
+            logger.error("定时器任务执行失败", e);
+        }
         PERCENT_INSTANCE.setMinimumFractionDigits(2);
         kafkaLogSend = KafkaUtils.getInstance();
     }
+
+    @Override
+    public Map<String, Object> getComponentConfiguration() {
+        Map<String, Object> conf = new HashMap<>();
+        conf.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, 3);
+        return conf;
+    }
+
 
     @Override
     public void execute(Tuple input, BasicOutputCollector collector) {
@@ -64,18 +89,16 @@ public class DosDetectionBolt extends BaseBasicBolt {
             String destinationIp = sketchLog.getDestination_ip();
             String attackType = sketchLog.getAttack_type();
             logger.debug("当前判断IP：{}, 类型: {}", destinationIp, attackType);
-
-            List<Integer> baseline = HBaseUtils.getAccount(destinationIp, attackType);
-            if (baseline != null && baseline.size() == BASELINE_SIZE) {
-                int timeIndex = getCurrentTimeIndex(sketchLog.getSketch_start_time());
-                Integer base = baseline.get(timeIndex);
+            if (baselineMap.containsKey(destinationIp)) {
+                Tuple2<ArrayList<Integer>, Integer> floodTypeTup = baselineMap.get(destinationIp).get(attackType);
+                Integer base = getBaseValue(floodTypeTup, sketchLog);
                 long diff = sketchLog.getSketch_sessions() - base;
-                if (diff > 0) {
+                if (diff > 0 && base != 0) {
                     double percent = getDiffPercent(diff, base);
                     Severity severity = judgeSeverity(percent);
                     if (severity != Severity.NORMAL) {
                         DosEventLog result = getResult(sketchLog, severity, percent);
-                        logger.info("检测到当前server IP {} 存在 {} 异常,超出基线{} {}倍,日志详情\n {}", destinationIp,attackType,base,percent,result);
+                        logger.info("检测到当前server IP {} 存在 {} 异常,超出基线{} {}倍,日志详情\n {}", destinationIp, attackType, base, percent, result);
                         return result;
                     } else {
                         logger.debug("当前server IP：{} 未出现 {} 异常,日志详情 {}", destinationIp, attackType, sketchLog);
@@ -107,6 +130,27 @@ public class DosDetectionBolt extends BaseBasicBolt {
         dosEventLog.setPacket_rate(value.getSketch_packets());
         dosEventLog.setBit_rate(value.getSketch_bytes());
         return dosEventLog;
+    }
+
+    private Integer getBaseValue(Tuple2<ArrayList<Integer>, Integer> floodTypeTup, DosSketchLog value) {
+        Integer base = 0;
+        try {
+            if (floodTypeTup != null) {
+                ArrayList<Integer> baselines = floodTypeTup._1;
+                Integer defaultVaule = floodTypeTup._2;
+                if (baselines != null && baselines.size() == BASELINE_SIZE) {
+                    int timeIndex = getCurrentTimeIndex(value.getSketch_start_time());
+                    base = baselines.get(timeIndex);
+                    if (base == 0) {
+                        logger.debug("获取到当前IP: {},类型: {} baseline值为0,替换为P95观测值{}", value.getDestination_ip(), value.getAttack_type(), defaultVaule);
+                        base = defaultVaule;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("解析baseline数据失败,返回默认值0", e);
+        }
+        return base;
     }
 
     private String getConditions(String percent) {
