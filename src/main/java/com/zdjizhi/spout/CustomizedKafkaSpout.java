@@ -40,6 +40,10 @@ public class CustomizedKafkaSpout extends BaseRichSpout {
         props.put("auto.offset.reset", CommonConfig.KAFKA_SCAN_STARTUP_MODE);
         props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.setProperty("security.protocol", "SASL_PLAINTEXT");
+        props.setProperty("sasl.mechanism", "PLAIN");
+        props.setProperty("sasl.jaas.config", "org.apache.kafka.common.security.plain.PlainLoginModule required username=\""+CommonConfig.SASL_JAAS_CONFIG_USER+"\" password=\""+CommonConfig.SASL_JAAS_CONFIG_PASSWORD+"\";");
+
 
         return props;
     }
