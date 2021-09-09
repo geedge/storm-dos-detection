@@ -36,6 +36,10 @@ public class MiddleStreamBolt extends BaseBasicBolt {
             if (TupleUtils.isTick(input)) {
                 for (Tuple2<String, String> keys : middleStreamResult.keySet()) {
                     DosSketchLog sketchLog = middleStreamResult.get(keys);
+                    long sketchDuration = sketchLog.getSketch_duration();
+                    sketchLog.setSketch_sessions(sketchLog.getSketch_sessions()/sketchDuration);
+                    sketchLog.setSketch_packets(sketchLog.getSketch_packets()/sketchDuration);
+                    sketchLog.setSketch_bytes(sketchLog.getSketch_bytes()/sketchDuration);
                     collector.emit(new Values(sketchLog));
                 }
                 logger.debug("中间结果计算完毕,共计: {}条", middleStreamResult.size());

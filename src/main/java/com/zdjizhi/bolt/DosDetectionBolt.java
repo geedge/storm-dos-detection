@@ -120,29 +120,30 @@ public class DosDetectionBolt extends BaseBasicBolt {
 
     private DosEventLog mergeFinalResult(Tuple2<Severity, DosEventLog> eventLogByBaseline, Tuple2<Severity, DosEventLog> eventLogByStaticThreshold) {
         if (eventLogByBaseline._1.score > eventLogByStaticThreshold._1.score) {
-            mergeCondition(eventLogByBaseline._2, eventLogByStaticThreshold._2);
             logger.info("merge eventLogByBaseline {} \neventLogByStaticThreshold {}",eventLogByBaseline,eventLogByStaticThreshold);
-            return eventLogByBaseline._2;
+            return mergeCondition(eventLogByBaseline._2, eventLogByStaticThreshold._2);
         } else {
-            mergeCondition(eventLogByStaticThreshold._2, eventLogByBaseline._2);
             logger.info("merge eventLogByStaticThreshold {} \neventLogByBaseline {}",eventLogByStaticThreshold,eventLogByBaseline);
-            return eventLogByStaticThreshold._2;
+            return mergeCondition(eventLogByStaticThreshold._2, eventLogByBaseline._2);
         }
     }
 
-    private void mergeCondition(DosEventLog log1, DosEventLog log2) {
+    private DosEventLog mergeCondition(DosEventLog log1, DosEventLog log2) {
         if (log1 != null && log2 != null) {
             String conditions1 = log1.getConditions();
             String conditions2 = log2.getConditions();
             log1.setConditions(conditions1 + " and " + conditions2);
+        }else if (log1 == null && log2 != null){
+            log1 = log2;
         }
+        return log1;
     }
 
     private Tuple2<Severity, DosEventLog> getDosEventLogByBaseline(DosSketchLog value, String destinationIp, String attackType) {
         Tuple2<ArrayList<Integer>, Integer> floodTypeTup = baselineMap.get(destinationIp).get(attackType);
         Integer base = getBaseValue(floodTypeTup, value);
-        long diff = value.getSketch_sessions() - base;
-        return getDosEventLog(value, base, diff, "baseline");
+        long sketchSessions = value.getSketch_sessions();
+        return sketchSessions > CommonConfig.SENSITIVITY_THRESHOLD ? getDosEventLog(value, base, sketchSessions - base, "baseline"):io.vavr.Tuple.of(Severity.NORMAL, null);
     }
 
     private Tuple2<Severity, DosEventLog> getDosEventLogByStaticThreshold(DosSketchLog value, Map<String, DosDetectionThreshold> thresholdMap) {
