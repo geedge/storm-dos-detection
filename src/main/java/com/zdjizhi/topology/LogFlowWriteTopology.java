@@ -59,7 +59,7 @@ public class LogFlowWriteTopology {
         builder.setSpout("SketchLogSpout", new CustomizedKafkaSpout(), CommonConfig.KAFKA_INPUT_PARALLELISM);
         builder.setBolt("ParseSketchLogBolt", new ParseSketchLogBolt(), CommonConfig.KAFKA_INPUT_PARALLELISM)
                 .localOrShuffleGrouping("SketchLogSpout");
-        builder.setBolt("MiddleStreamBolt", new MiddleStreamBolt())
+        builder.setBolt("MiddleStreamBolt", new MiddleStreamBolt(),CommonConfig.MIDDLE_STREAM_BOLT_PARALLELISM)
                 .fieldsGrouping("ParseSketchLogBolt", new Fields("attack_type", "destination_ip"));
         builder.setBolt("ServerIpMetricsBolt", new ServerIpMetricsBolt(), CommonConfig.KAFKA_OUTPUT_METRIC_PARALLELISM)
                 .localOrShuffleGrouping("MiddleStreamBolt");
