@@ -42,7 +42,7 @@ public class ParseStaticThreshold {
         String psw = HttpClientUtils.ERROR_MESSAGE;
         try {
             URIBuilder uriBuilder = new URIBuilder(CommonConfig.BIFANG_SERVER_URI);
-            HashMap<String, String> parms = new HashMap<>();
+            HashMap<String, Object> parms = new HashMap<>();
             parms.put("password", CommonConfig.BIFANG_SERVER_PASSWORD);
             HttpClientUtils.setUrlWithParams(uriBuilder, CommonConfig.BIFANG_SERVER_ENCRYPTPWD_PATH, parms);
             String resposeJsonStr = HttpClientUtils.httpGet(uriBuilder.build());
@@ -74,7 +74,7 @@ public class ParseStaticThreshold {
         try {
             if (!HttpClientUtils.ERROR_MESSAGE.equals(encryptpwd)) {
                 URIBuilder uriBuilder = new URIBuilder(CommonConfig.BIFANG_SERVER_URI);
-                HashMap<String, String> parms = new HashMap<>();
+                HashMap<String, Object> parms = new HashMap<>();
                 parms.put("username", CommonConfig.BIFANG_SERVER_USER);
                 parms.put("password", encryptpwd);
                 HttpClientUtils.setUrlWithParams(uriBuilder, CommonConfig.BIFANG_SERVER_LOGIN_PATH, parms);
@@ -105,7 +105,9 @@ public class ParseStaticThreshold {
         ArrayList<DosDetectionThreshold> thresholds = null;
         try {
             URIBuilder uriBuilder = new URIBuilder(CommonConfig.BIFANG_SERVER_URI);
-            HttpClientUtils.setUrlWithParams(uriBuilder, CommonConfig.BIFANG_SERVER_POLICY_THRESHOLD_PATH, null);
+            HashMap<String, Object> parms = new HashMap<>();
+            parms.put("pageSize",-1);
+            HttpClientUtils.setUrlWithParams(uriBuilder, CommonConfig.BIFANG_SERVER_POLICY_THRESHOLD_PATH, parms);
             String token = loginBifangServer();
             if (!HttpClientUtils.ERROR_MESSAGE.equals(token)) {
                 BasicHeader authorization = new BasicHeader("Authorization", token);
@@ -149,7 +151,16 @@ public class ParseStaticThreshold {
                                 floodTypeThresholdMap = new HashMap<>();
                             }
                             floodTypeThresholdMap.put(threshold.getAttackType(), threshold);
-                            thresholdRangeMap.put(Range.closed(address.getLower(), address.getUpper()), floodTypeThresholdMap);
+                            if (address.isPrefixed()){
+                                if (address.isMultiple()){
+                                    thresholdRangeMap.put(Range.closed(address.getLower(), address.getUpper()), floodTypeThresholdMap);
+                                }else {
+                                    thresholdRangeMap.put(Range.closed(address.adjustPrefixLength(address.getBitCount()),
+                                            address.toMaxHost().withoutPrefixLength()), floodTypeThresholdMap);
+                                }
+                            }else {
+                                thresholdRangeMap.put(Range.closed(address, address), floodTypeThresholdMap);
+                            }
                         }
                     }
                 }
@@ -161,7 +172,15 @@ public class ParseStaticThreshold {
     }
 
     public static void main(String[] args) {
+
+        ArrayList<DosDetectionThreshold> dosDetectionThreshold = getDosDetectionThreshold();
+        dosDetectionThreshold.forEach(System.out::println);
+
+
+        System.out.println("------------------------");
         TreeRangeMap<IPAddress, Map<String, DosDetectionThreshold>> staticThreshold = createStaticThreshold();
+
+        /*
         Map<Range<IPAddress>, Map<String, DosDetectionThreshold>> rangeMapMap = staticThreshold.asMapOfRanges();
         for (Range<IPAddress> range : rangeMapMap.keySet()) {
             Map<String, DosDetectionThreshold> thresholdMap = rangeMapMap.get(range);
@@ -170,6 +189,8 @@ public class ParseStaticThreshold {
                 System.out.println(range + "---" + type + "---" + threshold);
             }
         }
+        */
+
     }
 
 

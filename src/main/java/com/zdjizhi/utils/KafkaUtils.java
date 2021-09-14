@@ -70,10 +70,11 @@ public class KafkaUtils {
         properties.put("batch.size", CommonConfig.BATCH_SIZE);
         properties.put("buffer.memory", CommonConfig.BUFFER_MEMORY);
         properties.put("max.request.size", CommonConfig.MAX_REQUEST_SIZE);
-        properties.setProperty("security.protocol", "SASL_PLAINTEXT");
-        properties.setProperty("sasl.mechanism", "PLAIN");
-        properties.setProperty("sasl.jaas.config", "org.apache.kafka.common.security.plain.PlainLoginModule required username=\""+CommonConfig.SASL_JAAS_CONFIG_USER+"\" password=\""+CommonConfig.SASL_JAAS_CONFIG_PASSWORD+"\";");
-
+        if (CommonConfig.SASL_JAAS_CONFIG_FLAG == 1){
+            properties.put("security.protocol", "SASL_PLAINTEXT");
+            properties.put("sasl.mechanism", "PLAIN");
+            properties.put("sasl.jaas.config", "org.apache.kafka.common.security.plain.PlainLoginModule required username=\""+CommonConfig.SASL_JAAS_CONFIG_USER+"\" password=\""+CommonConfig.SASL_JAAS_CONFIG_PASSWORD+"\";");
+        }
 
         kafkaProducer = new KafkaProducer<>(properties);
     }

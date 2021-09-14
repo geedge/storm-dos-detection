@@ -95,22 +95,17 @@ public class DosDetectionBolt extends BaseBasicBolt {
         try {
             String destinationIp = value.getDestination_ip();
             String attackType = value.getAttack_type();
-            long sketchSessions = value.getSketch_sessions();
             IPAddress destinationIpAddress = new IPAddressString(destinationIp).getAddress();
             Map<String, DosDetectionThreshold> thresholdMap = thresholdRangeMap.get(destinationIpAddress);
             logger.debug("当前判断IP：{}, 类型: {}", destinationIp, attackType);
-            if (sketchSessions > CommonConfig.SENSITIVITY_THRESHOLD){
-                if (baselineMap != null && baselineMap.containsKey(destinationIp) && thresholdMap == null) {
-                    finalResult = getDosEventLogByBaseline(value, destinationIp, attackType)._2;
-                } else if (baselineMap != null && !baselineMap.containsKey(destinationIp) && thresholdMap != null) {
-                    finalResult = getDosEventLogByStaticThreshold(value, thresholdMap)._2;
-                } else if (baselineMap != null && baselineMap.containsKey(destinationIp) && thresholdMap != null) {
-                    Tuple2<Severity, DosEventLog> eventLogByBaseline = getDosEventLogByBaseline(value, destinationIp, attackType);
-                    Tuple2<Severity, DosEventLog> eventLogByStaticThreshold = getDosEventLogByStaticThreshold(value, thresholdMap);
-                    finalResult = mergeFinalResult(eventLogByBaseline, eventLogByStaticThreshold);
-                } else {
-                    logger.debug("未获取到当前server IP：{} 类型 {} 静态阈值 和 baseline", destinationIp, attackType);
-                }
+            if (thresholdMap == null && baselineMap.containsKey(destinationIp)) {
+                finalResult = getDosEventLogByBaseline(value, destinationIp, attackType);
+            }else if (thresholdMap == null && !baselineMap.containsKey(destinationIp)){
+                finalResult = getDosEventLogBySensitivityThreshold(value);
+            } else if (thresholdMap != null){
+                finalResult = getDosEventLogByStaticThreshold(value, thresholdMap);
+            }else {
+                logger.debug("未获取到当前server IP：{} 类型 {} 静态阈值 和 baseline", destinationIp, attackType);
             }
         } catch (Exception e) {
             logger.error("判定失败\n {} \n{}", value, e);
@@ -118,36 +113,29 @@ public class DosDetectionBolt extends BaseBasicBolt {
         return finalResult;
     }
 
-    private DosEventLog mergeFinalResult(Tuple2<Severity, DosEventLog> eventLogByBaseline, Tuple2<Severity, DosEventLog> eventLogByStaticThreshold) {
-        if (eventLogByBaseline._1.score > eventLogByStaticThreshold._1.score) {
-            logger.info("merge eventLogByBaseline {} \neventLogByStaticThreshold {}",eventLogByBaseline,eventLogByStaticThreshold);
-            return mergeCondition(eventLogByBaseline._2, eventLogByStaticThreshold._2);
-        } else {
-            logger.info("merge eventLogByStaticThreshold {} \neventLogByBaseline {}",eventLogByStaticThreshold,eventLogByBaseline);
-            return mergeCondition(eventLogByStaticThreshold._2, eventLogByBaseline._2);
-        }
-    }
-
-    private DosEventLog mergeCondition(DosEventLog log1, DosEventLog log2) {
-        if (log1 != null && log2 != null) {
-            String conditions1 = log1.getConditions();
-            String conditions2 = log2.getConditions();
-            log1.setConditions(conditions1 + " and " + conditions2);
-        }else if (log1 == null && log2 != null){
-            log1 = log2;
-        }
-        return log1;
-    }
-
-    private Tuple2<Severity, DosEventLog> getDosEventLogByBaseline(DosSketchLog value, String destinationIp, String attackType) {
-        Tuple2<ArrayList<Integer>, Integer> floodTypeTup = baselineMap.get(destinationIp).get(attackType);
-        Integer base = getBaseValue(floodTypeTup, value);
+    private DosEventLog getDosEventLogBySensitivityThreshold(DosSketchLog value){
+        DosEventLog result = null;
         long sketchSessions = value.getSketch_sessions();
-        return sketchSessions > CommonConfig.SENSITIVITY_THRESHOLD ? getDosEventLog(value, base, sketchSessions - base, "baseline"):io.vavr.Tuple.of(Severity.NORMAL, null);
+        if (sketchSessions > CommonConfig.SENSITIVITY_THRESHOLD){
+            result = getDosEventLog(value, CommonConfig.SENSITIVITY_THRESHOLD, sketchSessions - CommonConfig.SENSITIVITY_THRESHOLD, "sensitivity");
+            result.setSeverity(Severity.MAJOR.severity);
+        }
+        return result;
     }
 
-    private Tuple2<Severity, DosEventLog> getDosEventLogByStaticThreshold(DosSketchLog value, Map<String, DosDetectionThreshold> thresholdMap) {
-        Tuple2<Severity, DosEventLog> result = io.vavr.Tuple.of(Severity.NORMAL, null);
+    private DosEventLog getDosEventLogByBaseline(DosSketchLog value, String destinationIp, String attackType) {
+        DosEventLog result = null;
+        long sketchSessions = value.getSketch_sessions();
+        if (sketchSessions > CommonConfig.SENSITIVITY_THRESHOLD){
+            Tuple2<ArrayList<Integer>, Integer> floodTypeTup = baselineMap.get(destinationIp).get(attackType);
+            Integer base = getBaseValue(floodTypeTup, value);
+            result = getDosEventLog(value, base, sketchSessions - base, "baseline");
+        }
+        return result;
+    }
+
+    private DosEventLog getDosEventLogByStaticThreshold(DosSketchLog value, Map<String, DosDetectionThreshold> thresholdMap) {
+        DosEventLog result = null;
         String attackType = value.getAttack_type();
         if (thresholdMap.containsKey(attackType)) {
             DosDetectionThreshold threshold = thresholdMap.get(attackType);
@@ -158,22 +146,21 @@ public class DosDetectionBolt extends BaseBasicBolt {
         return result;
     }
 
-    private Tuple2<Severity, DosEventLog> getDosEventLog(DosSketchLog value, long base, long diff, String tag) {
+    private DosEventLog getDosEventLog(DosSketchLog value, long base, long diff, String tag) {
         DosEventLog result = null;
         String destinationIp = value.getDestination_ip();
         String attackType = value.getAttack_type();
-        Severity severity = Severity.NORMAL;
         if (diff > 0 && base != 0) {
             double percent = getDiffPercent(diff, base);
-            severity = judgeSeverity(percent);
-            if (severity != Severity.NORMAL) {
+            Severity severity = judgeSeverity(percent);
+            if (severity != Severity.NORMAL && value.getSource_ip() != null) {
                 result = getResult(value, severity, percent, tag);
                 logger.info("检测到当前server IP {} 存在 {} 异常,超出基线{} {}倍,日志详情\n {}", destinationIp,attackType,base,percent,result);
             } else {
                 logger.debug("当前server IP：{} 未出现 {} 异常,日志详情 {}", destinationIp, attackType, value.toString());
             }
         }
-        return io.vavr.Tuple.of(severity, result);
+        return result;
     }
 
     private DosEventLog getResult(DosSketchLog value, Severity severity, double percent, String tag) {
@@ -222,6 +209,8 @@ public class DosDetectionBolt extends BaseBasicBolt {
                 return "sessions > " + percent + " of baseline";
             case "static":
                 return "sessions > " + sessions + " sessions/s";
+            case "sensitivity":
+                return sessions+" sessions/s Unusually high Sessions";
             default:
                 return null;
         }
@@ -286,6 +275,29 @@ public class DosDetectionBolt extends BaseBasicBolt {
             this.score = score;
         }
 
+    }
+
+    @Deprecated
+    private DosEventLog mergeFinalResult(Tuple2<Severity, DosEventLog> eventLogByBaseline, Tuple2<Severity, DosEventLog> eventLogByStaticThreshold) {
+        if (eventLogByBaseline._1.score > eventLogByStaticThreshold._1.score) {
+            logger.info("merge eventLogByBaseline {} \neventLogByStaticThreshold {}",eventLogByBaseline,eventLogByStaticThreshold);
+            return mergeCondition(eventLogByBaseline._2, eventLogByStaticThreshold._2);
+        } else {
+            logger.info("merge eventLogByStaticThreshold {} \neventLogByBaseline {}",eventLogByStaticThreshold,eventLogByBaseline);
+            return mergeCondition(eventLogByStaticThreshold._2, eventLogByBaseline._2);
+        }
+    }
+
+    @Deprecated
+    private DosEventLog mergeCondition(DosEventLog log1, DosEventLog log2) {
+        if (log1 != null && log2 != null) {
+            String conditions1 = log1.getConditions();
+            String conditions2 = log2.getConditions();
+            log1.setConditions(conditions1 + " and " + conditions2);
+        }else if (log1 == null && log2 != null){
+            log1 = log2;
+        }
+        return log1;
     }
 
     @Override

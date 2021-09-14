@@ -11,8 +11,12 @@ class StreamAggregationHandler {
     private static final Log logger = LogFactory.get();
 
     static void mergeSketch(DosSketchLog sketchLog, DosSketchLog tmpSketchLog) throws Exception{
-        setAverage(sketchLog,tmpSketchLog);
-        updateDistinctSourceIp(sketchLog,tmpSketchLog);
+        String tmpSketchLogSourceIp = tmpSketchLog.getSource_ip();
+        if ("0.0.0.0".equals(tmpSketchLogSourceIp) || "::".equals(tmpSketchLogSourceIp)){
+            setAverage(sketchLog,tmpSketchLog);
+        }else {
+            updateDistinctSourceIp(sketchLog,tmpSketchLog);
+        }
     }
 
     static void initSketch(DosSketchLog tmpSketchLog) throws Exception{
@@ -20,15 +24,18 @@ class StreamAggregationHandler {
     }
 
     private static void setAverage(DosSketchLog sketchLog, DosSketchLog tmpSketchLog) throws Exception{
-        sketchLog.setSketch_sessions((sketchLog.getSketch_sessions()+tmpSketchLog.getSketch_sessions())/2);
-        sketchLog.setSketch_packets((sketchLog.getSketch_packets()+tmpSketchLog.getSketch_packets())/2);
-        sketchLog.setSketch_bytes((sketchLog.getSketch_bytes()+tmpSketchLog.getSketch_bytes())/2);
+        sketchLog.setSketch_sessions(sketchLog.getSketch_sessions()+tmpSketchLog.getSketch_sessions());
+        sketchLog.setSketch_packets(sketchLog.getSketch_packets()+tmpSketchLog.getSketch_packets());
+        sketchLog.setSketch_bytes(sketchLog.getSketch_bytes()+tmpSketchLog.getSketch_bytes());
     }
 
     private static void initDistinctSourceIp(DosSketchLog tmpSketchLog){
         try {
             HashSet<String> sourceIpList = new HashSet<>();
-            sourceIpList.add(tmpSketchLog.getSource_ip());
+            String sourceIp = tmpSketchLog.getSource_ip();
+            if (!"0.0.0.0".equals(sourceIp) && !"::".equals(sourceIp)){
+                sourceIpList.add(sourceIp);
+            }
             tmpSketchLog.setSource_ip_list(sourceIpList);
             logger.debug("{} 初始化distinct source IP成功",tmpSketchLog);
         }catch (Exception e){

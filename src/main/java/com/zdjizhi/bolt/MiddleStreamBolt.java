@@ -6,6 +6,7 @@ import com.zdjizhi.common.CommonConfig;
 import com.zdjizhi.common.DosSketchLog;
 import com.zdjizhi.utils.TupleUtils;
 import io.vavr.Tuple2;
+import org.apache.commons.lang.StringUtils;
 import org.apache.storm.Config;
 import org.apache.storm.task.TopologyContext;
 import org.apache.storm.topology.BasicOutputCollector;
@@ -36,10 +37,10 @@ public class MiddleStreamBolt extends BaseBasicBolt {
             if (TupleUtils.isTick(input)) {
                 for (Tuple2<String, String> keys : middleStreamResult.keySet()) {
                     DosSketchLog sketchLog = middleStreamResult.get(keys);
-                    long sketchDuration = sketchLog.getSketch_duration();
-                    sketchLog.setSketch_sessions(sketchLog.getSketch_sessions()/sketchDuration);
-                    sketchLog.setSketch_packets(sketchLog.getSketch_packets()/sketchDuration);
-                    sketchLog.setSketch_bytes(sketchLog.getSketch_bytes()/sketchDuration);
+                    sketchLog.setSketch_sessions(sketchLog.getSketch_sessions()/CommonConfig.STORM_WINDOW_MAX_TIME);
+                    sketchLog.setSketch_packets(sketchLog.getSketch_packets()/CommonConfig.STORM_WINDOW_MAX_TIME);
+                    sketchLog.setSketch_bytes(sketchLog.getSketch_bytes()*8/CommonConfig.STORM_WINDOW_MAX_TIME);
+                    sketchLog.setSource_ip(StringUtils.join(sketchLog.getSource_ip_list(), ","));
                     collector.emit(new Values(sketchLog));
                 }
                 logger.debug("中间结果计算完毕,共计: {}条", middleStreamResult.size());

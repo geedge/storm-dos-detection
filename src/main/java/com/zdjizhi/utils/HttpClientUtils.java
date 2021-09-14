@@ -255,12 +255,12 @@ public class HttpClientUtils {
      * 拼装url
      * url ,参数map
      */
-    public static void setUrlWithParams(URIBuilder uriBuilder,String path, Map<String, String> params) {
+    public static void setUrlWithParams(URIBuilder uriBuilder,String path, Map<String, Object> params) {
         try {
             uriBuilder.setPath(path);
             if (params != null && !params.isEmpty()){
-                for (Map.Entry<String, String> kv : params.entrySet()) {
-                    uriBuilder.setParameter(kv.getKey(),kv.getValue());
+                for (Map.Entry<String, Object> kv : params.entrySet()) {
+                    uriBuilder.setParameter(kv.getKey(),kv.getValue().toString());
                 }
             }
         } catch (Exception e) {

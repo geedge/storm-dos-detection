@@ -35,7 +35,7 @@ public class HbaseUtils {
         floodTypeList.add("TCP SYN Flood");
         floodTypeList.add("UDP Flood");
         floodTypeList.add("ICMP Flood");
-        floodTypeList.add("DNS Amplification");
+        floodTypeList.add("DNS Flood");
     }
 
     private static void prepareHbaseEnv() throws IOException {

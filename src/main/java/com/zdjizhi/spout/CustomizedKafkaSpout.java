@@ -40,11 +40,11 @@ public class CustomizedKafkaSpout extends BaseRichSpout {
         props.put("auto.offset.reset", CommonConfig.KAFKA_SCAN_STARTUP_MODE);
         props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
-        props.setProperty("security.protocol", "SASL_PLAINTEXT");
-        props.setProperty("sasl.mechanism", "PLAIN");
-        props.setProperty("sasl.jaas.config", "org.apache.kafka.common.security.plain.PlainLoginModule required username=\""+CommonConfig.SASL_JAAS_CONFIG_USER+"\" password=\""+CommonConfig.SASL_JAAS_CONFIG_PASSWORD+"\";");
-
-
+        if (CommonConfig.SASL_JAAS_CONFIG_FLAG == 1){
+            props.put("security.protocol", "SASL_PLAINTEXT");
+            props.put("sasl.mechanism", "PLAIN");
+            props.put("sasl.jaas.config", "org.apache.kafka.common.security.plain.PlainLoginModule required username=\""+CommonConfig.SASL_JAAS_CONFIG_USER+"\" password=\""+CommonConfig.SASL_JAAS_CONFIG_PASSWORD+"\";");
+        }
         return props;
     }
 
@@ -73,7 +73,7 @@ public class CustomizedKafkaSpout extends BaseRichSpout {
                 this.collector.emit(new Values(record.value()));
             }
         } catch (Exception e) {
-            logger.error("KafkaSpout发送消息出现异常!", e);
+            logger.error("消费kafka消息异常!", e);
         }
     }
 
