@@ -43,7 +43,7 @@ public class ParseStaticThreshold {
         try {
             URIBuilder uriBuilder = new URIBuilder(CommonConfig.BIFANG_SERVER_URI);
             HashMap<String, Object> parms = new HashMap<>();
-            parms.put("password", CommonConfig.BIFANG_SERVER_PASSWORD);
+            parms.put("password", "admin");
             HttpClientUtils.setUrlWithParams(uriBuilder, CommonConfig.BIFANG_SERVER_ENCRYPTPWD_PATH, parms);
             String resposeJsonStr = HttpClientUtils.httpGet(uriBuilder.build());
             if (!HttpClientUtils.ERROR_MESSAGE.equals(resposeJsonStr)) {
@@ -75,7 +75,7 @@ public class ParseStaticThreshold {
             if (!HttpClientUtils.ERROR_MESSAGE.equals(encryptpwd)) {
                 URIBuilder uriBuilder = new URIBuilder(CommonConfig.BIFANG_SERVER_URI);
                 HashMap<String, Object> parms = new HashMap<>();
-                parms.put("username", CommonConfig.BIFANG_SERVER_USER);
+                parms.put("username", "admin");
                 parms.put("password", encryptpwd);
                 HttpClientUtils.setUrlWithParams(uriBuilder, CommonConfig.BIFANG_SERVER_LOGIN_PATH, parms);
                 String resposeJsonStr = HttpClientUtils.httpPost(uriBuilder.build(), null);
@@ -108,7 +108,8 @@ public class ParseStaticThreshold {
             HashMap<String, Object> parms = new HashMap<>();
             parms.put("pageSize",-1);
             HttpClientUtils.setUrlWithParams(uriBuilder, CommonConfig.BIFANG_SERVER_POLICY_THRESHOLD_PATH, parms);
-            String token = loginBifangServer();
+//            String token = loginBifangServer();
+            String token = CommonConfig.BIFANG_SERVER_TOKEN;
             if (!HttpClientUtils.ERROR_MESSAGE.equals(token)) {
                 BasicHeader authorization = new BasicHeader("Authorization", token);
                 String resposeJsonStr = HttpClientUtils.httpGet(uriBuilder.build(), authorization);

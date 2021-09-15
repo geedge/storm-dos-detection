@@ -226,7 +226,7 @@ public class DosDetectionBolt extends BaseBasicBolt {
     }
 
     private int getCurrentTimeIndex(long sketchStartTime) {
-        long currentDayTime = sketchStartTime / (60 * 60 * 24) * 60 * 60 * 24;
+        long currentDayTime = DateUtils.getTimeFloor(new Date(sketchStartTime * 1000L), "P1D").getTime()/1000;
         long indexLong = (sketchStartTime - currentDayTime) / 600;
         return Integer.parseInt(Long.toString(indexLong));
     }
