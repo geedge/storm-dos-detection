@@ -116,8 +116,8 @@ public class DosDetectionBolt extends BaseBasicBolt {
     private DosEventLog getDosEventLogBySensitivityThreshold(DosSketchLog value){
         DosEventLog result = null;
         long sketchSessions = value.getSketch_sessions();
-        if (sketchSessions > CommonConfig.SENSITIVITY_THRESHOLD){
-            result = getDosEventLog(value, CommonConfig.SENSITIVITY_THRESHOLD, sketchSessions - CommonConfig.SENSITIVITY_THRESHOLD, "sensitivity");
+        if (sketchSessions > CommonConfig.STATIC_SENSITIVITY_THRESHOLD){
+            result = getDosEventLog(value, CommonConfig.STATIC_SENSITIVITY_THRESHOLD, sketchSessions - CommonConfig.STATIC_SENSITIVITY_THRESHOLD, "sensitivity");
             result.setSeverity(Severity.MAJOR.severity);
         }
         return result;
@@ -126,7 +126,7 @@ public class DosDetectionBolt extends BaseBasicBolt {
     private DosEventLog getDosEventLogByBaseline(DosSketchLog value, String destinationIp, String attackType) {
         DosEventLog result = null;
         long sketchSessions = value.getSketch_sessions();
-        if (sketchSessions > CommonConfig.SENSITIVITY_THRESHOLD){
+        if (sketchSessions > CommonConfig.STATIC_SENSITIVITY_THRESHOLD){
             Tuple2<ArrayList<Integer>, Integer> floodTypeTup = baselineMap.get(destinationIp).get(attackType);
             Integer base = getBaseValue(floodTypeTup, value);
             result = getDosEventLog(value, base, sketchSessions - base, "baseline");
@@ -154,8 +154,12 @@ public class DosDetectionBolt extends BaseBasicBolt {
             double percent = getDiffPercent(diff, base);
             Severity severity = judgeSeverity(percent);
             if (severity != Severity.NORMAL && value.getSource_ip() != null) {
-                result = getResult(value, severity, percent, tag);
-                logger.info("检测到当前server IP {} 存在 {} 异常,超出基线{} {}倍,日志详情\n {}", destinationIp,attackType,base,percent,result);
+                if ("baseline".equals(tag) && percent < CommonConfig.BASELINE_SENSITIVITY_THRESHOLD){
+                    logger.debug("当前server IP:{},类型:{},基线值{}百分比{}未超过基线敏感阈值,日志详情\n{}",destinationIp,attackType,base,percent,value);
+                }else {
+                    result = getResult(value,base, severity, percent, tag);
+                    logger.info("检测到当前server IP {} 存在 {} 异常,超出基线{} {}倍,日志详情\n {}", destinationIp,attackType,base,percent,result);
+                }
             } else {
                 logger.debug("当前server IP：{} 未出现 {} 异常,日志详情 {}", destinationIp, attackType, value.toString());
             }
@@ -163,14 +167,14 @@ public class DosDetectionBolt extends BaseBasicBolt {
         return result;
     }
 
-    private DosEventLog getResult(DosSketchLog value, Severity severity, double percent, String tag) {
+    private DosEventLog getResult(DosSketchLog value, long base, Severity severity, double percent, String tag) {
         DosEventLog dosEventLog = new DosEventLog();
         dosEventLog.setLog_id(SnowflakeId.generateId());
         dosEventLog.setStart_time(value.getSketch_start_time());
         dosEventLog.setEnd_time(value.getSketch_start_time() + CommonConfig.STORM_WINDOW_MAX_TIME);
         dosEventLog.setAttack_type(value.getAttack_type());
         dosEventLog.setSeverity(severity.severity);
-        dosEventLog.setConditions(getConditions(PERCENT_INSTANCE.format(percent), value.getSketch_sessions(), tag));
+        dosEventLog.setConditions(getConditions(PERCENT_INSTANCE.format(percent),base, value.getSketch_sessions(), tag));
         dosEventLog.setDestination_ip(value.getDestination_ip());
         dosEventLog.setDestination_country(IpUtils.ipLookup.countryLookup(value.getDestination_ip()));
         String ipList = value.getSource_ip();
@@ -203,12 +207,12 @@ public class DosDetectionBolt extends BaseBasicBolt {
         return base;
     }
 
-    private String getConditions(String percent, long sessions, String tag) {
+    private String getConditions(String percent, long base, long sessions, String tag) {
         switch (tag) {
             case "baseline":
                 return "sessions > " + percent + " of baseline";
             case "static":
-                return "sessions > " + sessions + " sessions/s";
+                return "sessions > " + base + " sessions/s";
             case "sensitivity":
                 return sessions+" sessions/s Unusually high Sessions";
             default:

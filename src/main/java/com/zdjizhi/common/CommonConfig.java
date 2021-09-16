@@ -35,7 +35,8 @@ public class CommonConfig {
 
     public static final String IP_MMDB_PATH = CommonConfigurations.getStringProperty("ip.mmdb.path");
 
-    public static final int SENSITIVITY_THRESHOLD = CommonConfigurations.getIntProperty("sensitivity.threshold");
+    public static final int STATIC_SENSITIVITY_THRESHOLD = CommonConfigurations.getIntProperty("static.sensitivity.threshold");
+    public static final double BASELINE_SENSITIVITY_THRESHOLD = CommonConfigurations.getDoubleProperty("baseline.sensitivity.threshold");
 
     public static final Integer MIDDLE_STREAM_BOLT_PARALLELISM = CommonConfigurations.getIntProperty("middle.stream.bolt.parallelism");
 
