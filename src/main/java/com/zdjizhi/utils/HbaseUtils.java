@@ -1,8 +1,7 @@
 package com.zdjizhi.utils;
 
 import com.zdjizhi.common.CommonConfig;
-import io.vavr.Tuple;
-import io.vavr.Tuple2;
+import com.zdjizhi.common.DosBaselineThreshold;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HConstants;
 import org.apache.hadoop.hbase.TableName;
@@ -56,33 +55,38 @@ public class HbaseUtils {
     }
 
     public static void main(String[] args) {
-        Map<String, Map<String, Tuple2<ArrayList<Integer>, Integer>>> baselineMap = readFromHbase();
+        Map<String, Map<String, DosBaselineThreshold>> baselineMap = readFromHbase();
         Set<String> keySet = baselineMap.keySet();
         for (String key : keySet) {
-            Map<String, Tuple2<ArrayList<Integer>, Integer>> stringTuple2Map = baselineMap.get(key);
+            Map<String, DosBaselineThreshold> stringTuple2Map = baselineMap.get(key);
             Set<String> strings = stringTuple2Map.keySet();
             for (String s:strings){
-                Tuple2<ArrayList<Integer>, Integer> arrayListIntegerTuple2 = stringTuple2Map.get(s);
-                System.out.println(key+"---"+s+"---"+arrayListIntegerTuple2._1+"---"+arrayListIntegerTuple2._2);
+                DosBaselineThreshold dosBaselineThreshold = stringTuple2Map.get(s);
+                System.out.println(key+"---"+s+"---"+dosBaselineThreshold);
             }
         }
         System.out.println(baselineMap.size());
     }
 
-    public static Map<String, Map<String, Tuple2<ArrayList<Integer>, Integer>>> readFromHbase() {
-        Map<String, Map<String, Tuple2<ArrayList<Integer>, Integer>>> baselineMap = new HashMap<>();
+    public static Map<String, Map<String, DosBaselineThreshold>> readFromHbase() {
+        Map<String, Map<String, DosBaselineThreshold>> baselineMap = new HashMap<>();
         try {
             prepareHbaseEnv();
             logger.info("开始读取baseline数据");
             ResultScanner rs = table.getScanner(scan);
             for (Result result : rs) {
-                Map<String, Tuple2<ArrayList<Integer>, Integer>> floodTypeMap = new HashMap<>();
+                Map<String, DosBaselineThreshold> floodTypeMap = new HashMap<>();
                 String rowkey = Bytes.toString(result.getRow());
                 for (String type:floodTypeList){
-                    ArrayList<Integer> sessionRate = getArraylist(result, type, "session_rate");
+                    DosBaselineThreshold baselineThreshold = new DosBaselineThreshold();
+                    ArrayList<Integer> sessionRate = HbaseUtils.getArraylist(result, type, "session_rate");
                     if (sessionRate != null && !sessionRate.isEmpty()){
-                        Integer defaultValue = getDefaultValue(result, type, "session_rate_default_value");
-                        floodTypeMap.put(type, Tuple.of(sessionRate, defaultValue));
+                        Integer defaultValue = getIntegerValue(result, type, "session_rate_default_value");
+                        Integer rateBaselineType = getIntegerValue(result, type, "session_rate_baseline_type");
+                        baselineThreshold.setSession_rate(sessionRate);
+                        baselineThreshold.setSession_rate_default_value(defaultValue);
+                        baselineThreshold.setSession_rate_baseline_type(rateBaselineType);
+                        floodTypeMap.put(type,baselineThreshold);
                     }
                 }
                 baselineMap.put(rowkey, floodTypeMap);
@@ -94,7 +98,7 @@ public class HbaseUtils {
         return baselineMap;
     }
 
-    private static Integer getDefaultValue(Result result, String family, String qualifier) {
+    private static Integer getIntegerValue(Result result, String family, String qualifier) {
         byte[] value = result.getValue(Bytes.toBytes(family), Bytes.toBytes(qualifier));
         if (value != null){
             return Bytes.toInt(value);

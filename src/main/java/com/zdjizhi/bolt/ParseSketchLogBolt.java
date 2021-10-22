@@ -52,7 +52,6 @@ public class ParseSketchLogBolt extends BaseBasicBolt {
         try {
             HashMap<String, Object> sketchSource = jsonMapperInstance.fromJson(message, hashmapJsonType);
             String commonSledIp = sketchSource.get("common_sled_ip").toString();
-            String commonDataCenter = sketchSource.get("common_data_center").toString();
             long sketchStartTime = Long.parseLong(sketchSource.get("sketch_start_time").toString());
             long sketchDuration = Long.parseLong(sketchSource.get("sketch_duration").toString());
             String attackType = sketchSource.get("attack_type").toString();
@@ -60,7 +59,6 @@ public class ParseSketchLogBolt extends BaseBasicBolt {
             for (HashMap<String, Object> obj : reportIpList) {
                 DosSketchLog dosSketchLog = new DosSketchLog();
                 dosSketchLog.setCommon_sled_ip(commonSledIp);
-                dosSketchLog.setCommon_data_center(commonDataCenter);
                 dosSketchLog.setSketch_start_time(sketchStartTime);
                 dosSketchLog.setSketch_duration(sketchDuration);
                 dosSketchLog.setAttack_type(attackType);
